@@ -3,36 +3,14 @@ from typing import cast
 from mpd import CommandError, MPDClient
 from textual.app import App, ComposeResult
 from textual.events import Mount
-from textual.widgets import (Footer, ListItem, ListView, Static, TabbedContent,
-                             TabPane)
+from textual.widgets import (DataTable, Footer, ListItem, ListView, Static,
+                             TabbedContent, TabPane)
 
 from mpd_protocols import MPDCommandsProtocol
 
 
-class PlaylistWidget(ListView):
+class PlaylistWidget(DataTable):
     """A browsable playlist for the current MPD queue."""
-
-    def on_mount(self) -> None:
-        self.client = MPDClient()
-        self.client.timeout = 10
-        self.client.idletimeout = None
-        self.protocol = cast(MPDCommandsProtocol, self.client)
-        self.protocol.connect("localhost", 6600)
-        self.refresh_playlist()
-
-    def refresh_playlist(self):
-        """Fetch and display the current playlist."""
-        playlist = self.protocol.playlistinfo()
-        self.clear()
-        for song in playlist:
-            title = song.get("title", "Unknown Title")
-            artist = song.get("artist", "Unknown Artist")
-            self.append(ListItem(name=f"{artist} - {title}"))
-
-    def on_unmount(self) -> None:
-        """Disconnect from MPD when the widget is unmounted."""
-        self.protocol.close()
-        self.protocol.disconnect()
 
 
 class TxtmpcApp(App):
@@ -43,6 +21,33 @@ class TxtmpcApp(App):
         ("2", "show_tab('library')", "Library"),
         ("q", "quit", "Quit"),
     ]
+
+    def on_mount(self) -> None:
+        self.client = MPDClient()
+        self.client.timeout = 10
+        self.client.idletimeout = None
+        self.protocol = cast(MPDCommandsProtocol, self.client)
+        self.protocol.connect("localhost", 6600)
+
+        table = self.query_one(PlaylistWidget)
+        table.add_columns("Artist", "Track", "Title", "Album", "Time")
+        table.cursor_type = "row"
+        table.focus()
+
+        playlist = self.protocol.playlistinfo()
+        table.clear()
+        for song in playlist:
+            title = song.get("title", "Unknown Title")
+            artist = song.get("artist", "Unknown Artist")
+            album = song.get("album", "Unknown Album")
+            time = song.get("time", "0")
+            minutes = int(time) // 60
+            seconds = int(time) % 60
+            time = f"{minutes}:{seconds:02}"
+            track = song.get("track", "N/A")
+            id = song.get("id")
+
+            table.add_row(artist, track, title, album, time, key=id)
 
     def compose(self) -> ComposeResult:
         """Compose app with tabbed content."""
@@ -59,6 +64,13 @@ class TxtmpcApp(App):
     def action_show_tab(self, tab: str) -> None:
         """Switch to a new tab."""
         self.get_child_by_type(TabbedContent).active = tab
+        table = self.query_one(PlaylistWidget)
+        table.focus()
+
+    def on_unmount(self) -> None:
+        """Disconnect from MPD when the widget is unmounted."""
+        self.protocol.close()
+        self.protocol.disconnect()
 
 
 if __name__ == "__main__":

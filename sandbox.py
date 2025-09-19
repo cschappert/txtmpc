@@ -1,6 +1,9 @@
-from mpd import MPDClient
-from mpd_protocols import MPDCommandsProtocol
 from typing import cast
+
+from mpd import MPDClient
+
+from mpd_protocols import MPDCommandsProtocol
+
 
 def main():
     # TODO: Currently using a protocol so that type checking and autocompletion on
